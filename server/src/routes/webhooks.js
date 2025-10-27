@@ -3,6 +3,7 @@ import multer from 'multer';
 
 import { parseMailgunPayload } from '../services/emailParser.js';
 import { insertEmail } from '../services/emailService.js';
+import { getOrganizationByRecipient } from '../services/organizationService.js';
 
 const upload = multer();
 
@@ -30,6 +31,18 @@ export function registerWebhookRoutes(app) {
         ? new Date(Number(payload.timestamp) * 1000)
         : new Date();
 
+      // Look up organization by recipient email
+      const organization = await getOrganizationByRecipient(recipient);
+
+      if (!organization) {
+        console.error(`No organization found for recipient: ${recipient}`);
+        return res.status(400).json({
+          error: 'No organization found for this recipient address'
+        });
+      }
+
+      console.log(`Email matched to organization: ${organization.name} (${organization.id})`);
+
       const parsed = await parseMailgunPayload(payload, files);
 
       const imageUrls = parsed.attachments.map((attachment) => {
@@ -44,7 +57,8 @@ export function registerWebhookRoutes(app) {
         receivedAt: timestamp.toISOString(),
         rawText: parsed.text || parsed.html,
         textContent: parsed.text,
-        imageUrls
+        imageUrls,
+        organizationId: organization.id
       });
 
       res.status(204).end();

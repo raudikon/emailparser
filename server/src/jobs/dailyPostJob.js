@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { fetchEmailsForDateRange } from '../services/emailService.js';
 import { storeGeneratedPosts } from '../services/postService.js';
 import { generateInstagramCaptions } from '../services/aiGenerator.js';
+import { listOrganizations } from '../services/organizationService.js';
 
 const DAILY_CRON = process.env.DAILY_CRON ?? '0 22 * * *'; // default: 10pm UTC daily
 
@@ -20,20 +21,42 @@ export function scheduleDailyPostJob() {
     end.setHours(23, 59, 59, 999);
 
     try {
-      const emails = await fetchEmailsForDateRange(start, end);
+      // Get all organizations
+      const organizations = await listOrganizations();
 
-      if (!emails.length) {
-        console.log('Daily post job: no emails for today, skipping caption generation.');
+      if (!organizations.length) {
+        console.log('Daily post job: no organizations found, skipping.');
         return;
       }
 
-      const captions = await generateInstagramCaptions({
-        emails,
-        date: now
-      });
+      console.log(`Daily post job: processing ${organizations.length} organizations...`);
 
-      await storeGeneratedPosts(captions);
-      console.log(`Daily post job: stored ${captions.length} new captions.`);
+      // Process each organization separately
+      for (const org of organizations) {
+        try {
+          const emails = await fetchEmailsForDateRange(start, end, org.id);
+
+          if (!emails.length) {
+            console.log(`Daily post job [${org.name}]: no emails for today, skipping.`);
+            continue;
+          }
+
+          console.log(`Daily post job [${org.name}]: generating captions for ${emails.length} emails...`);
+
+          const captions = await generateInstagramCaptions({
+            emails,
+            date: now
+          });
+
+          await storeGeneratedPosts(captions, org.id);
+          console.log(`Daily post job [${org.name}]: stored ${captions.length} new captions.`);
+        } catch (orgError) {
+          console.error(`Daily post job [${org.name}] failed:`, orgError);
+          // Continue processing other organizations even if one fails
+        }
+      }
+
+      console.log('Daily post job: completed for all organizations.');
     } catch (error) {
       console.error('Daily post job failed:', error);
     }

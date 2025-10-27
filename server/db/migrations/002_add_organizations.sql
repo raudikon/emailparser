@@ -1,3 +1,4 @@
+-- Create organizations table
 create table if not exists organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -5,8 +6,10 @@ create table if not exists organizations (
   created_at timestamptz not null default now()
 );
 
+-- Create index on recipient_email for fast lookup
 create index if not exists idx_organizations_recipient_email on organizations(recipient_email);
 
+-- Create user_profiles table to link users to organizations
 create table if not exists user_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   organization_id uuid not null references organizations(id) on delete cascade,
@@ -14,36 +17,17 @@ create table if not exists user_profiles (
   created_at timestamptz not null default now()
 );
 
+-- Create index for organization lookups
 create index if not exists idx_user_profiles_organization_id on user_profiles(organization_id);
 
-create table if not exists emails (
-  id uuid primary key default gen_random_uuid(),
-  sender text not null,
-  recipient text not null,
-  subject text,
-  received_at timestamptz not null default now(),
-  raw_text text,
-  organization_id uuid references organizations(id) on delete cascade
-);
+-- Add organization_id to emails table
+alter table emails add column if not exists organization_id uuid references organizations(id) on delete cascade;
 
+-- Create index for filtering emails by organization
 create index if not exists idx_emails_organization_id on emails(organization_id);
 
-create table if not exists parsed_email_content (
-  email_id uuid references emails(id) on delete cascade,
-  text_content text,
-  image_urls text[],
-  processed boolean not null default false
-);
+-- Add organization_id to ai_generated_posts for per-org post generation
+alter table ai_generated_posts add column if not exists organization_id uuid references organizations(id) on delete cascade;
 
-create table if not exists ai_generated_posts (
-  id uuid primary key default gen_random_uuid(),
-  caption_text text not null,
-  image_url text,
-  created_at timestamptz not null default now(),
-  organization_id uuid references organizations(id) on delete cascade
-);
-
+-- Create index for filtering posts by organization
 create index if not exists idx_ai_generated_posts_organization_id on ai_generated_posts(organization_id);
-
-alter table parsed_email_content
-  add constraint parsed_email_content_email_id_key unique (email_id);
