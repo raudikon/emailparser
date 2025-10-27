@@ -102,3 +102,4 @@ POST https://<your-domain>/api/webhooks/mailgun
 The route parses MIME payloads, stores the email row, and generates inline data URLs for image attachments. Replace the inline storage with Supabase Storage (or another CDN) when you are ready for production.
 
 ---
+---
