@@ -1,14 +1,27 @@
 import express from 'express';
+import multer from 'multer';
 
 import { parseMailgunPayload } from '../services/emailParser.js';
 import { insertEmail } from '../services/emailService.js';
 
+const upload = multer();
+
 export function registerWebhookRoutes(app) {
   const router = express.Router();
 
-  router.post('/mailgun', async (req, res) => {
+  router.post('/mailgun', upload.any(), async (req, res) => {
     try {
       const payload = req.body;
+      const files = req.files || [];
+
+      console.log('=== MAILGUN PAYLOAD ===');
+      console.log('Available keys:', Object.keys(payload));
+      console.log('Files count:', files.length);
+      if (files.length > 0) {
+        console.log('Files:', files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, mimetype: f.mimetype, size: f.size })));
+      }
+      console.log('Full payload:', JSON.stringify(payload, null, 2));
+      console.log('=====================');
 
       const sender = payload.sender ?? payload.From ?? 'unknown@unknown';
       const recipient = payload.recipient ?? payload.To ?? 'unknown@unknown';
@@ -17,7 +30,7 @@ export function registerWebhookRoutes(app) {
         ? new Date(Number(payload.timestamp) * 1000)
         : new Date();
 
-      const parsed = await parseMailgunPayload(payload);
+      const parsed = await parseMailgunPayload(payload, files);
 
       const imageUrls = parsed.attachments.map((attachment) => {
         const base64 = attachment.content.toString('base64');
