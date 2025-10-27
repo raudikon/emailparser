@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import { registerEmailRoutes } from './routes/emails.js';
 import { registerPostRoutes } from './routes/posts.js';
 import { registerWebhookRoutes } from './routes/webhooks.js';
+import { registerOrganizationRoutes } from './routes/organizations.js';
 import { scheduleDailyPostJob } from './jobs/dailyPostJob.js';
 
 const PORT = process.env.PORT ?? 3001;
@@ -22,6 +23,7 @@ async function bootstrap() {
   registerWebhookRoutes(app);
   registerEmailRoutes(app);
   registerPostRoutes(app);
+  registerOrganizationRoutes(app);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

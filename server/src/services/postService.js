@@ -1,15 +1,24 @@
 import { supabaseAdmin } from '../lib/supabaseClient.js';
 
-export async function listDailyPosts(limit = 30) {
+export async function listDailyPosts(organizationId = null, limit = 30) {
   if (!supabaseAdmin) {
     throw new Error('Supabase client not configured');
   }
 
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('ai_generated_posts')
-    .select('*')
+    .select('*');
+
+  // Filter by organization if provided
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+
+  query = query
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -18,7 +27,7 @@ export async function listDailyPosts(limit = 30) {
   return data ?? [];
 }
 
-export async function storeGeneratedPosts(posts) {
+export async function storeGeneratedPosts(posts, organizationId = null) {
   if (!supabaseAdmin) {
     throw new Error('Supabase client not configured');
   }
@@ -30,7 +39,8 @@ export async function storeGeneratedPosts(posts) {
   const payload = posts.map((post) => ({
     caption_text: post.caption_text,
     image_url: post.image_url ?? null,
-    created_at: post.created_at ?? new Date().toISOString()
+    created_at: post.created_at ?? new Date().toISOString(),
+    organization_id: organizationId
   }));
 
   const { data, error } = await supabaseAdmin

@@ -1,11 +1,11 @@
 import { supabaseAdmin } from '../lib/supabaseClient.js';
 
-export async function listEmails() {
+export async function listEmails(organizationId = null) {
   if (!supabaseAdmin) {
     throw new Error('Supabase client not configured');
   }
 
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('emails')
     .select(`
       id,
@@ -14,13 +14,22 @@ export async function listEmails() {
       subject,
       received_at,
       raw_text,
+      organization_id,
       parsed_content:parsed_email_content (
         text_content,
         image_urls,
         processed
       )
-    `)
-    .order('received_at', { ascending: false });
+    `);
+
+  // Filter by organization if provided
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+
+  query = query.order('received_at', { ascending: false });
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -36,7 +45,8 @@ export async function insertEmail({
   receivedAt,
   rawText,
   textContent,
-  imageUrls
+  imageUrls,
+  organizationId
 }) {
   if (!supabaseAdmin) {
     throw new Error('Supabase client not configured');
@@ -49,7 +59,8 @@ export async function insertEmail({
       recipient,
       subject,
       received_at: receivedAt,
-      raw_text: rawText
+      raw_text: rawText,
+      organization_id: organizationId
     })
     .select()
     .single();
@@ -74,17 +85,25 @@ export async function insertEmail({
   return emailData;
 }
 
-export async function fetchEmailsForDateRange(startDate, endDate) {
+export async function fetchEmailsForDateRange(startDate, endDate, organizationId = null) {
   if (!supabaseAdmin) {
     throw new Error('Supabase client not configured');
   }
 
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('emails')
     .select('*')
     .gte('received_at', startDate.toISOString())
-    .lte('received_at', endDate.toISOString())
-    .order('received_at', { ascending: true });
+    .lte('received_at', endDate.toISOString());
+
+  // Filter by organization if provided
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+
+  query = query.order('received_at', { ascending: true });
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
