@@ -1,7 +1,7 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 
-// Use vision-capable model (latest stable version)
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20240620';
+// Use vision-capable model - Claude 3 Opus has excellent vision capabilities
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-haiku-4-5';
 const anthropic = process.env.CLAUDE_API_KEY
   ? new Anthropic({ apiKey: process.env.CLAUDE_API_KEY })
   : null;
