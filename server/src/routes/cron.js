@@ -4,6 +4,7 @@ import { fetchEmailsWithImagesForDateRange } from '../services/emailService.js';
 import { storeGeneratedPosts } from '../services/postService.js';
 import { generateInstagramCaptions } from '../services/aiGenerator.js';
 import { listOrganizations } from '../services/organizationService.js';
+import { sendDailyPostsNotification } from '../services/emailNotificationService.js';
 
 /**
  * Middleware to verify cron secret token
@@ -116,6 +117,25 @@ export function registerCronRoutes(app) {
 
           await storeGeneratedPosts(captions, org.id);
           console.log(`[Cron][${org.name}] Stored ${captions.length} new caption+image combinations.`);
+
+          // Send email notification
+          const notificationEmail = process.env.NOTIFICATION_EMAIL;
+          if (notificationEmail) {
+            try {
+              await sendDailyPostsNotification({
+                toEmail: notificationEmail,
+                posts: captions,
+                organizationName: org.name,
+                date: now
+              });
+              console.log(`[Cron][${org.name}] Sent notification email to ${notificationEmail}`);
+            } catch (emailError) {
+              console.error(`[Cron][${org.name}] Failed to send notification email:`, emailError.message);
+              // Don't fail the whole job if email fails
+            }
+          } else {
+            console.log(`[Cron][${org.name}] NOTIFICATION_EMAIL not set, skipping email notification`);
+          }
 
           results.push({
             organization: org.name,
