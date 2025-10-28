@@ -92,7 +92,14 @@ export async function fetchEmailsForDateRange(startDate, endDate, organizationId
 
   let query = supabaseAdmin
     .from('emails')
-    .select('*')
+    .select(`
+      *,
+      parsed_content:parsed_email_content (
+        text_content,
+        image_urls,
+        processed
+      )
+    `)
     .gte('received_at', startDate.toISOString())
     .lte('received_at', endDate.toISOString());
 
@@ -110,4 +117,62 @@ export async function fetchEmailsForDateRange(startDate, endDate, organizationId
   }
 
   return data ?? [];
+}
+
+/**
+ * Fetch emails with images for AI caption generation
+ * Only returns emails that have at least one image
+ */
+export async function fetchEmailsWithImagesForDateRange(startDate, endDate, organizationId = null) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase client not configured');
+  }
+
+  let query = supabaseAdmin
+    .from('emails')
+    .select(`
+      id,
+      sender,
+      recipient,
+      subject,
+      received_at,
+      raw_text,
+      organization_id,
+      parsed_content:parsed_email_content!inner (
+        text_content,
+        image_urls
+      )
+    `)
+    .gte('received_at', startDate.toISOString())
+    .lte('received_at', endDate.toISOString());
+
+  // Filter by organization if provided
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+
+  query = query.order('received_at', { ascending: true });
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  // Filter to only emails with images and flatten structure
+  const emailsWithImages = (data ?? [])
+    .filter(email =>
+      email.parsed_content?.image_urls &&
+      email.parsed_content.image_urls.length > 0
+    )
+    .map(email => ({
+      id: email.id,
+      sender: email.sender,
+      subject: email.subject,
+      textContent: email.parsed_content.text_content || email.raw_text,
+      imageUrls: email.parsed_content.image_urls,
+      receivedAt: email.received_at
+    }));
+
+  return emailsWithImages;
 }

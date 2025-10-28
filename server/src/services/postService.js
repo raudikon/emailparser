@@ -38,7 +38,11 @@ export async function storeGeneratedPosts(posts, organizationId = null) {
 
   const payload = posts.map((post) => ({
     caption_text: post.caption_text,
+    email_id: post.email_id ?? null,
+    source_image_url: post.source_image_url ?? null,
+    // Keep image_url for backward compatibility
     image_url: post.image_url ?? null,
+    suggested_image: post.suggested_image ?? null,
     created_at: post.created_at ?? new Date().toISOString(),
     organization_id: organizationId
   }));

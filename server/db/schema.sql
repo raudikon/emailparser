@@ -38,12 +38,16 @@ create table if not exists parsed_email_content (
 create table if not exists ai_generated_posts (
   id uuid primary key default gen_random_uuid(),
   caption_text text not null,
+  email_id uuid references emails(id) on delete set null,
+  source_image_url text,
   image_url text,
+  suggested_image text,
   created_at timestamptz not null default now(),
   organization_id uuid references organizations(id) on delete cascade
 );
 
 create index if not exists idx_ai_generated_posts_organization_id on ai_generated_posts(organization_id);
+create index if not exists idx_ai_generated_posts_email_id on ai_generated_posts(email_id);
 
 alter table parsed_email_content
   add constraint parsed_email_content_email_id_key unique (email_id);
