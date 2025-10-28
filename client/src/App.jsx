@@ -55,10 +55,32 @@ function DailyPosts({ posts }) {
           <header>
             <span className="badge highlight">{format(new Date(post.created_at), 'PP')}</span>
           </header>
+
+          {/* Display the actual image if available */}
+          {post.source_image_url && (
+            <div className="post-image-wrapper">
+              <img
+                src={post.source_image_url}
+                alt="Post image"
+                className="post-image"
+                loading="lazy"
+              />
+            </div>
+          )}
+
           <p className="post-text">{post.caption_text}</p>
-          <footer>
-            Suggested image:&nbsp;
-            <strong>{post.image_url ?? 'None'}</strong>
+
+          <footer className="post-footer">
+            <button
+              className="copy-btn"
+              onClick={() => {
+                navigator.clipboard.writeText(post.caption_text);
+                alert('Caption copied to clipboard!');
+              }}
+              title="Copy caption"
+            >
+              📋 Copy Caption
+            </button>
           </footer>
         </article>
       ))}

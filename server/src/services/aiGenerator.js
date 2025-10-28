@@ -19,6 +19,8 @@ export async function generateInstagramCaptions({ emails, date }) {
     return [];
   }
 
+  console.log(`[AI] Using Claude model: ${CLAUDE_MODEL}`);
+
   // Build content array with images and text for Claude to review
   const contentBlocks = [];
 
@@ -63,6 +65,16 @@ Images from this email:`
         const mediaType = matches[1];
         const base64Data = matches[2];
 
+        // Log image size for debugging
+        const sizeInMB = (base64Data.length * 0.75) / (1024 * 1024); // base64 is ~1.33x larger than binary
+        console.log(`[AI] Image ${emailIndex + 1}-${imageIndex + 1}: ${sizeInMB.toFixed(2)}MB`);
+
+        // Anthropic's API has limits - skip images over 5MB
+        if (sizeInMB > 5) {
+          console.warn(`[AI] Skipping image ${emailIndex + 1}-${imageIndex + 1}: too large (${sizeInMB.toFixed(2)}MB)`);
+          return;
+        }
+
         contentBlocks.push({
           type: 'image',
           source: {
@@ -104,23 +116,59 @@ The email_index and image_index are 0-based (Email 1 = index 0, first image = in
 Make sure to pick the most visually appealing and engaging combinations.`
   });
 
-  const response = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 2048,
-    temperature: 0.7,
-    system: 'You are an expert social media manager for schools. You have a great eye for selecting engaging photos and writing compelling Instagram captions.',
-    messages: [
-      {
-        role: 'user',
-        content: contentBlocks
+  // Retry logic for overloaded errors
+  let response;
+  let retries = 3;
+  let lastError;
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`[AI] Sending request to Claude (attempt ${i + 1}/${retries})...`);
+      response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 2048,
+        temperature: 0.7,
+        system: 'You are an expert social media manager for schools. You have a great eye for selecting engaging photos and writing compelling Instagram captions.',
+        messages: [
+          {
+            role: 'user',
+            content: contentBlocks
+          }
+        ]
+      });
+      break; // Success, exit retry loop
+    } catch (error) {
+      lastError = error;
+      console.error(`[AI] Attempt ${i + 1} failed:`, error.message);
+
+      // If it's an overloaded error and we have retries left, wait and retry
+      if (error.status === 529 && i < retries - 1) {
+        const waitTime = (i + 1) * 2000; // 2s, 4s, 6s
+        console.log(`[AI] Claude overloaded, retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        throw error; // No more retries or different error
       }
-    ]
-  });
+    }
+  }
+
+  if (!response) {
+    throw lastError || new Error('Failed to get response from Claude');
+  }
 
   const messageContent = response.content?.[0]?.text ?? '{}';
 
   try {
-    const parsed = JSON.parse(messageContent);
+    // Strip markdown code fences if present (```json ... ```)
+    let jsonString = messageContent.trim();
+    if (jsonString.startsWith('```')) {
+      // Remove opening fence (```json or ```JSON or just ```)
+      jsonString = jsonString.replace(/^```(?:json|JSON)?\n?/, '');
+      // Remove closing fence
+      jsonString = jsonString.replace(/\n?```$/, '');
+    }
+
+    const parsed = JSON.parse(jsonString);
     if (!Array.isArray(parsed.selections) || parsed.selections.length === 0) {
       console.warn('Claude returned no selections, using fallback');
       return [];
