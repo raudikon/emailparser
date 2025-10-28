@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 
-import { fetchEmailsForDateRange } from '../services/emailService.js';
+import { fetchEmailsWithImagesForDateRange } from '../services/emailService.js';
 import { storeGeneratedPosts } from '../services/postService.js';
 import { generateInstagramCaptions } from '../services/aiGenerator.js';
 import { listOrganizations } from '../services/organizationService.js';
@@ -34,22 +34,31 @@ export function scheduleDailyPostJob() {
       // Process each organization separately
       for (const org of organizations) {
         try {
-          const emails = await fetchEmailsForDateRange(start, end, org.id);
+          // Fetch only emails that have images
+          const emails = await fetchEmailsWithImagesForDateRange(start, end, org.id);
 
           if (!emails.length) {
-            console.log(`Daily post job [${org.name}]: no emails for today, skipping.`);
+            console.log(`Daily post job [${org.name}]: no emails with images for today, skipping.`);
             continue;
           }
 
-          console.log(`Daily post job [${org.name}]: generating captions for ${emails.length} emails...`);
+          // Count total images
+          const totalImages = emails.reduce((sum, email) => sum + email.imageUrls.length, 0);
+
+          console.log(`Daily post job [${org.name}]: reviewing ${emails.length} emails with ${totalImages} images...`);
 
           const captions = await generateInstagramCaptions({
             emails,
             date: now
           });
 
+          if (captions.length === 0) {
+            console.log(`Daily post job [${org.name}]: Claude selected no images, skipping.`);
+            continue;
+          }
+
           await storeGeneratedPosts(captions, org.id);
-          console.log(`Daily post job [${org.name}]: stored ${captions.length} new captions.`);
+          console.log(`Daily post job [${org.name}]: stored ${captions.length} new caption+image combinations.`);
         } catch (orgError) {
           console.error(`Daily post job [${org.name}] failed:`, orgError);
           // Continue processing other organizations even if one fails

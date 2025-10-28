@@ -1,50 +1,118 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-3-haiku-20240307';
+// Use vision-capable model
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20241022';
 const anthropic = process.env.CLAUDE_API_KEY
   ? new Anthropic({ apiKey: process.env.CLAUDE_API_KEY })
   : null;
 
+/**
+ * Generate Instagram captions by having Claude review images and email content
+ * Claude will select the best 3-5 image+caption combinations from all emails
+ */
 export async function generateInstagramCaptions({ emails, date }) {
   if (!anthropic) {
     throw new Error('Claude client not configured');
   }
 
-  const emailSummaries = emails.map((email, index) => {
-    const trimmed = (email.raw_text ?? '').slice(0, 2000);
-    return `Email ${index + 1}:
-Subject: ${email.subject ?? 'N/A'}
-Sender: ${email.sender ?? 'N/A'}
-Body:
-${trimmed}`;
-  }).join('\n\n');
+  if (!emails || emails.length === 0) {
+    return [];
+  }
 
-  const prompt = `You are a social media manager for a school. Based on the forwarded emails below, craft three engaging Instagram captions that parents and students will love. Each caption must be concise (max 60 words), upbeat, and mention the key details (dates, times, people) from the emails when relevant. If no image suggestion is obvious, say "Suggested image: none".
+  // Build content array with images and text for Claude to review
+  const contentBlocks = [];
 
-Daily context date: ${date.toISOString().split('T')[0]}
+  // Add intro text
+  contentBlocks.push({
+    type: 'text',
+    text: `You are a social media manager for a school. Today's date is ${date.toISOString().split('T')[0]}.
 
-Forwarded emails:
-${emailSummaries}
+You will review ${emails.length} emails with images from today. Each email may contain multiple images. Your task is to:
 
-Respond in valid JSON with the shape:
+1. Review all the images and their associated email content
+2. Select the 3-5 BEST image+caption combinations that would work great for Instagram
+3. For each selected image, write an engaging Instagram caption (max 60 words, upbeat, mention key details)
+
+Focus on images that are:
+- Visually appealing and clear
+- Show engaging activities or moments
+- Would resonate with parents and students
+
+Here are the emails with their images:\n\n`
+  });
+
+  // Add each email with its images
+  emails.forEach((email, emailIndex) => {
+    // Add email context
+    contentBlocks.push({
+      type: 'text',
+      text: `--- Email ${emailIndex + 1} ---
+Subject: ${email.subject ?? 'No subject'}
+From: ${email.sender ?? 'Unknown'}
+Text content: ${(email.textContent ?? '').slice(0, 1500)}
+
+Images from this email:`
+    });
+
+    // Add each image from this email
+    email.imageUrls.forEach((imageUrl, imageIndex) => {
+      // Extract base64 data and media type from data URL
+      // Format: data:image/png;base64,iVBORw0KG...
+      const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        const mediaType = matches[1];
+        const base64Data = matches[2];
+
+        contentBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data
+          }
+        });
+
+        contentBlocks.push({
+          type: 'text',
+          text: `[This is image ${imageIndex + 1} of ${email.imageUrls.length} from Email ${emailIndex + 1}]\n`
+        });
+      }
+    });
+
+    contentBlocks.push({
+      type: 'text',
+      text: '\n'
+    });
+  });
+
+  // Add instructions for response format
+  contentBlocks.push({
+    type: 'text',
+    text: `\n\nNow, select the 3-5 best image+caption combinations. Respond in valid JSON with this exact shape:
 {
-  "captions": [
-    { "text": "Caption text...", "suggested_image": "Optional short suggestion" },
-    ...
+  "selections": [
+    {
+      "email_index": 0,
+      "image_index": 0,
+      "caption": "Your engaging Instagram caption here...",
+      "reasoning": "Brief explanation of why this image works well"
+    }
   ]
 }
 
-Make sure there are exactly three captions.`;
+The email_index and image_index are 0-based (Email 1 = index 0, first image = index 0).
+Make sure to pick the most visually appealing and engaging combinations.`
+  });
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 1024,
+    max_tokens: 2048,
     temperature: 0.7,
-    system: 'You write ready-to-post Instagram captions for schools.',
+    system: 'You are an expert social media manager for schools. You have a great eye for selecting engaging photos and writing compelling Instagram captions.',
     messages: [
       {
         role: 'user',
-        content: prompt
+        content: contentBlocks
       }
     ]
   });
@@ -53,19 +121,38 @@ Make sure there are exactly three captions.`;
 
   try {
     const parsed = JSON.parse(messageContent);
-    if (!Array.isArray(parsed.captions) || parsed.captions.length === 0) {
-      throw new Error('Claude response missing captions array');
+    if (!Array.isArray(parsed.selections) || parsed.selections.length === 0) {
+      console.warn('Claude returned no selections, using fallback');
+      return [];
     }
 
-    return parsed.captions.map((caption) => ({
-      caption_text: caption.text,
-      image_url: caption.suggested_image && caption.suggested_image.toLowerCase() !== 'none'
-        ? caption.suggested_image
-        : null,
-      created_at: new Date().toISOString()
-    }));
+    // Map Claude's selections back to actual email IDs and image URLs
+    const captions = parsed.selections.map((selection) => {
+      const email = emails[selection.email_index];
+      if (!email) {
+        console.warn(`Invalid email_index ${selection.email_index}`);
+        return null;
+      }
+
+      const imageUrl = email.imageUrls[selection.image_index];
+      if (!imageUrl) {
+        console.warn(`Invalid image_index ${selection.image_index} for email ${selection.email_index}`);
+        return null;
+      }
+
+      return {
+        caption_text: selection.caption,
+        email_id: email.id,
+        source_image_url: imageUrl,
+        created_at: new Date().toISOString()
+      };
+    }).filter(Boolean); // Remove any null entries
+
+    console.log(`Generated ${captions.length} captions from ${emails.length} emails`);
+    return captions;
   } catch (error) {
-    console.error('Failed to parse Claude response', error);
+    console.error('Failed to parse Claude response:', error);
+    console.error('Response was:', messageContent);
     throw new Error('Claude response parsing failed');
   }
 }
