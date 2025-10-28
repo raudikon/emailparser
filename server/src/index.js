@@ -8,6 +8,7 @@ import { registerEmailRoutes } from './routes/emails.js';
 import { registerPostRoutes } from './routes/posts.js';
 import { registerWebhookRoutes } from './routes/webhooks.js';
 import { registerOrganizationRoutes } from './routes/organizations.js';
+import { registerCronRoutes } from './routes/cron.js';
 import { scheduleDailyPostJob } from './jobs/dailyPostJob.js';
 
 const PORT = process.env.PORT ?? 3001;
@@ -24,12 +25,19 @@ async function bootstrap() {
   registerEmailRoutes(app);
   registerPostRoutes(app);
   registerOrganizationRoutes(app);
+  registerCronRoutes(app);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  scheduleDailyPostJob();
+  // Optional: Keep node-cron as backup if ENABLE_NODE_CRON is set
+  if (process.env.ENABLE_NODE_CRON === 'true') {
+    console.log('Starting node-cron scheduler...');
+    scheduleDailyPostJob();
+  } else {
+    console.log('node-cron disabled. Use /api/cron/generate-daily-posts endpoint instead.');
+  }
 
   app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
