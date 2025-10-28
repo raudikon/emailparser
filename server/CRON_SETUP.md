@@ -21,7 +21,21 @@ CRON_SECRET=your-random-secret-here-generate-a-strong-token
 
 # Claude API key (required for caption generation)
 CLAUDE_API_KEY=sk-ant-your-key-here
+
+# Mailgun configuration (for sending notification emails)
+MAILGUN_API_KEY=your-mailgun-api-key-here
+MAILGUN_DOMAIN=mg.yourdomain.com
+NOTIFICATION_FROM_EMAIL=noreply@mg.yourdomain.com
+NOTIFICATION_EMAIL=your-email@gmail.com
+
+# Frontend URL (for links in notification emails)
+FRONTEND_URL=https://your-app.com
 ```
+
+**To get your Mailgun API key:**
+1. Go to Mailgun Dashboard → Settings → API Keys
+2. Copy your Private API key
+3. Make sure your domain is verified
 
 **Generate a strong CRON_SECRET:**
 ```bash
@@ -185,6 +199,51 @@ CLAUDE_API_KEY=sk-ant-your-key-here
 [Cron] Completed in 15234ms. Generated 3 captions.
 ```
 
+## Email Notifications
+
+When the cron job completes, it automatically sends an email notification with all the generated captions.
+
+### Email Content
+
+The notification email includes:
+- **Subject:** Number of captions generated and organization name
+- **Body:** All caption text in both plain text and formatted HTML
+- **Link:** Direct link to dashboard to view posts with images
+- **Summary:** Number of emails processed and images reviewed
+
+### Example Email
+
+```
+Subject: 📱 3 New Instagram Captions Ready - NYC Schools
+
+Hi there,
+
+Your daily Instagram captions are ready for Monday, January 28, 2025!
+
+We've generated 3 captions from today's emails:
+
+1. Our preschoolers had a blast at the pumpkin patch! 🎃
+
+2. Science Fair winners announced! Congratulations to all our young scientists! 🔬
+
+3. Field day was a huge success! Thank you to all the volunteers! 🏃
+
+View Posts & Images →
+```
+
+### Configuration
+
+**Required Environment Variables:**
+- `NOTIFICATION_EMAIL` - Where to send the notification (e.g., `you@gmail.com`)
+- `MAILGUN_API_KEY` - Your Mailgun API key for sending
+- `MAILGUN_DOMAIN` - Your Mailgun domain
+- `NOTIFICATION_FROM_EMAIL` - From address (optional, defaults to `noreply@your-domain`)
+- `FRONTEND_URL` - Your frontend URL for the "View Posts" link (optional)
+
+### Disabling Notifications
+
+If you don't set `NOTIFICATION_EMAIL`, the cron job will run but skip sending emails.
+
 ### Troubleshooting
 
 **No captions generated:**
@@ -200,6 +259,13 @@ CLAUDE_API_KEY=sk-ant-your-key-here
 - Increase timeout if processing many images (Render default: 30s)
 - Claude vision calls can take 5-10 seconds per batch
 
+**Email not received:**
+- Check NOTIFICATION_EMAIL is set correctly
+- Verify MAILGUN_API_KEY and MAILGUN_DOMAIN are correct
+- Check spam folder
+- Look for error logs: "Failed to send notification email"
+- Test Mailgun credentials in dashboard
+
 ## Cost Considerations
 
 **Claude API Costs (claude-3-5-sonnet):**
@@ -207,6 +273,11 @@ CLAUDE_API_KEY=sk-ant-your-key-here
 - With 30 emails × 1.5 images each = 45 images
 - Daily cost: ~$0.14
 - Monthly cost: ~$4.20
+
+**Mailgun Sending (Notification Emails):**
+- First 5,000 emails/month: Free
+- After that: $0.80 per 1,000 emails
+- 1 email/day = ~30 emails/month (well within free tier)
 
 **Render Cron Jobs:**
 - Free tier includes cron jobs
