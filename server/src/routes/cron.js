@@ -52,13 +52,27 @@ export function registerCronRoutes(app) {
         });
       }
 
-      const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setHours(23, 59, 59, 999);
+      // Get timezone offset in hours (default to America/New_York = UTC-5)
+      // Set TIMEZONE_OFFSET env var to your timezone offset, e.g., "-5" for EST, "-4" for EDT
+      const timezoneOffsetHours = parseInt(process.env.TIMEZONE_OFFSET || '-5', 10);
 
-      console.log(`[Cron] Starting daily post generation for ${now.toISOString()}`);
+      const now = new Date();
+
+      // Calculate "today" in the target timezone
+      // Convert current UTC time to target timezone, then get start/end of that day
+      const utcNow = new Date(now.getTime() + (timezoneOffsetHours * 60 * 60 * 1000));
+
+      const start = new Date(utcNow);
+      start.setUTCHours(0, 0, 0, 0);
+      // Convert back to UTC by subtracting the offset
+      start.setTime(start.getTime() - (timezoneOffsetHours * 60 * 60 * 1000));
+
+      const end = new Date(utcNow);
+      end.setUTCHours(23, 59, 59, 999);
+      // Convert back to UTC by subtracting the offset
+      end.setTime(end.getTime() - (timezoneOffsetHours * 60 * 60 * 1000));
+
+      console.log(`[Cron] Starting daily post generation for ${now.toISOString()} (Timezone offset: ${timezoneOffsetHours}h)`);
 
       // Get all organizations
       const organizations = await listOrganizations();
@@ -81,7 +95,9 @@ export function registerCronRoutes(app) {
       for (const org of organizations) {
         try {
           // Fetch only emails that have images
+          console.log(`[Cron][${org.name}] Querying date range: ${start.toISOString()} to ${end.toISOString()}`);
           const emails = await fetchEmailsWithImagesForDateRange(start, end, org.id);
+          console.log(`[Cron][${org.name}] Found ${emails.length} emails with images`);
 
           if (!emails.length) {
             console.log(`[Cron][${org.name}] No emails with images for today, skipping.`);
