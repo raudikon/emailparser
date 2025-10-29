@@ -40,12 +40,15 @@ export async function getOrganizationByRecipient(recipientEmail) {
   }
 
   const normalizedEmail = recipientEmail.toLowerCase().trim();
+  console.log(`[OrgService] Looking up organization with email: "${normalizedEmail}"`);
 
   const { data, error } = await supabaseAdmin
     .from('organizations')
     .select('*')
     .ilike('recipient_email', normalizedEmail)
     .single();
+
+  console.log(`[OrgService] Query result - data:`, data, 'error:', error?.message || 'none');
 
   if (error) {
     if (error.code === 'PGRST116') {
