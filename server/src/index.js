@@ -10,6 +10,7 @@ import { registerWebhookRoutes } from './routes/webhooks.js';
 import { registerOrganizationRoutes } from './routes/organizations.js';
 import { registerCronRoutes } from './routes/cron.js';
 import { scheduleDailyPostJob } from './jobs/dailyPostJob.js';
+import { initializeStorage } from './services/imageStorageService.js';
 
 const PORT = process.env.PORT ?? 3001;
 
@@ -20,6 +21,9 @@ async function bootstrap() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(morgan('dev'));
+
+  // Initialize Supabase Storage
+  await initializeStorage();
 
   registerWebhookRoutes(app);
   registerEmailRoutes(app);

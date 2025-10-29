@@ -4,6 +4,7 @@ import multer from 'multer';
 import { parseMailgunPayload } from '../services/emailParser.js';
 import { insertEmail } from '../services/emailService.js';
 import { getOrganizationByRecipient } from '../services/organizationService.js';
+import { uploadImage } from '../services/imageStorageService.js';
 
 const upload = multer();
 
@@ -15,14 +16,7 @@ export function registerWebhookRoutes(app) {
       const payload = req.body;
       const files = req.files || [];
 
-      console.log('=== MAILGUN PAYLOAD ===');
-      console.log('Available keys:', Object.keys(payload));
-      console.log('Files count:', files.length);
-      if (files.length > 0) {
-        console.log('Files:', files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, mimetype: f.mimetype, size: f.size })));
-      }
-      console.log('Full payload:', JSON.stringify(payload, null, 2));
-      console.log('=====================');
+      console.log('[Webhook] Received email - Files:', files.length);
 
       const sender = payload.sender ?? payload.From ?? 'unknown@unknown';
       const recipient = payload.recipient ?? payload.To ?? 'unknown@unknown';
@@ -31,8 +25,13 @@ export function registerWebhookRoutes(app) {
         ? new Date(Number(payload.timestamp) * 1000)
         : new Date();
 
+      console.log(`[Webhook] Extracted recipient email: "${recipient}"`);
+      console.log(`[Webhook] Looking up organization for: "${recipient}"`);
+
       // Look up organization by recipient email
       const organization = await getOrganizationByRecipient(recipient);
+
+      console.log(`[Webhook] Organization lookup result:`, organization ? `Found: ${organization.name} (${organization.id})` : 'NOT FOUND');
 
       if (!organization) {
         console.error(`No organization found for recipient: ${recipient}`);
@@ -45,10 +44,25 @@ export function registerWebhookRoutes(app) {
 
       const parsed = await parseMailgunPayload(payload, files);
 
-      const imageUrls = parsed.attachments.map((attachment) => {
-        const base64 = attachment.content.toString('base64');
-        return `data:${attachment.contentType};base64,${base64}`;
-      });
+      // Upload images to Supabase Storage and get public URLs
+      const imageUrls = await Promise.all(
+        parsed.attachments.map(async (attachment) => {
+          try {
+            const publicUrl = await uploadImage(
+              attachment.content,
+              attachment.contentType,
+              organization.id
+            );
+            console.log(`[Webhook] Uploaded image: ${publicUrl}`);
+            return publicUrl;
+          } catch (error) {
+            console.error('[Webhook] Failed to upload image:', error);
+            // Fallback to base64 if upload fails
+            const base64 = attachment.content.toString('base64');
+            return `data:${attachment.contentType};base64,${base64}`;
+          }
+        })
+      );
 
       await insertEmail({
         sender,
