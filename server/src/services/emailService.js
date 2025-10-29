@@ -159,16 +159,6 @@ export async function fetchEmailsWithImagesForDateRange(startDate, endDate, orga
     throw error;
   }
 
-  console.log(`[fetchEmailsWithImagesForDateRange] Raw query returned ${data?.length || 0} emails`);
-  if (data && data.length > 0) {
-    console.log(`[fetchEmailsWithImagesForDateRange] Sample email:`, {
-      id: data[0].id,
-      received_at: data[0].received_at,
-      has_parsed_content: !!data[0].parsed_content,
-      image_urls: data[0].parsed_content?.image_urls
-    });
-  }
-
   // Filter to only emails with images and flatten structure
   const emailsWithImages = (data ?? [])
     .filter(email =>
@@ -183,8 +173,6 @@ export async function fetchEmailsWithImagesForDateRange(startDate, endDate, orga
       imageUrls: email.parsed_content.image_urls,
       receivedAt: email.received_at
     }));
-
-  console.log(`[fetchEmailsWithImagesForDateRange] After filtering: ${emailsWithImages.length} emails with images`);
 
   return emailsWithImages;
 }

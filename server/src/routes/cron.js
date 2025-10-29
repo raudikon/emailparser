@@ -95,9 +95,7 @@ export function registerCronRoutes(app) {
       for (const org of organizations) {
         try {
           // Fetch only emails that have images
-          console.log(`[Cron][${org.name}] Querying date range: ${start.toISOString()} to ${end.toISOString()}`);
           const emails = await fetchEmailsWithImagesForDateRange(start, end, org.id);
-          console.log(`[Cron][${org.name}] Found ${emails.length} emails with images`);
 
           if (!emails.length) {
             console.log(`[Cron][${org.name}] No emails with images for today, skipping.`);
@@ -115,24 +113,24 @@ export function registerCronRoutes(app) {
 
           console.log(`[Cron][${org.name}] Reviewing ${emails.length} emails with ${totalImages} images...`);
 
-          const captions = await generateInstagramCaptions({
+          const posts = await generateInstagramCaptions({
             emails,
             date: now
           });
 
-          if (captions.length === 0) {
+          if (posts.length === 0) {
             console.log(`[Cron][${org.name}] Claude selected no images, skipping.`);
             results.push({
               organization: org.name,
               success: true,
-              captionsGenerated: 0,
+              postsGenerated: 0,
               message: 'No images selected by AI'
             });
             continue;
           }
 
-          await storeGeneratedPosts(captions, org.id);
-          console.log(`[Cron][${org.name}] Stored ${captions.length} new caption+image combinations.`);
+          await storeGeneratedPosts(posts, org.id);
+          console.log(`[Cron][${org.name}] Stored ${posts.length} new posts.`);
 
           // Send email notification
           const notificationEmail = process.env.NOTIFICATION_EMAIL;
@@ -140,7 +138,7 @@ export function registerCronRoutes(app) {
             try {
               await sendDailyPostsNotification({
                 toEmail: notificationEmail,
-                posts: captions,
+                posts: posts,
                 organizationName: org.name,
                 date: now
               });
@@ -156,7 +154,7 @@ export function registerCronRoutes(app) {
           results.push({
             organization: org.name,
             success: true,
-            captionsGenerated: captions.length,
+            postsGenerated: posts.length,
             emailsProcessed: emails.length,
             imagesReviewed: totalImages
           });
@@ -171,15 +169,15 @@ export function registerCronRoutes(app) {
       }
 
       const duration = Date.now() - startTime;
-      const totalCaptions = results.reduce((sum, r) => sum + (r.captionsGenerated || 0), 0);
+      const totalPosts = results.reduce((sum, r) => sum + (r.postsGenerated || 0), 0);
 
-      console.log(`[Cron] Completed in ${duration}ms. Generated ${totalCaptions} captions.`);
+      console.log(`[Cron] Completed in ${duration}ms. Generated ${totalPosts} posts.`);
 
       res.json({
         success: true,
         message: 'Daily post generation completed',
         organizations: results,
-        totalCaptions,
+        totalPosts,
         duration
       });
     } catch (error) {
