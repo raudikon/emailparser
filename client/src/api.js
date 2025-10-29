@@ -28,3 +28,24 @@ export async function getDailyPosts(token) {
   const { data } = await fetchWithAuth('/api/daily-posts', token);
   return data;
 }
+
+export async function getUserOrganization(token) {
+  const { data } = await fetchWithAuth('/api/organizations/me', token);
+  return data;
+}
+
+export async function createOrganization(token, { name, recipientEmail }) {
+  const { data } = await fetchWithAuth('/api/organizations', token, {
+    method: 'POST',
+    body: JSON.stringify({ name, recipientEmail })
+  });
+  return data;
+}
+
+export async function checkEmailAvailability(token, recipientEmail) {
+  const { available } = await fetchWithAuth('/api/organizations/check-email', token, {
+    method: 'POST',
+    body: JSON.stringify({ recipientEmail })
+  });
+  return available;
+}

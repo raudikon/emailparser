@@ -191,3 +191,41 @@ export async function listOrganizations() {
 
   return data ?? [];
 }
+
+/**
+ * Get organization owner's email
+ */
+export async function getOrganizationOwnerEmail(organizationId) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase client not configured');
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('user_profiles')
+    .select(`
+      user_id,
+      role
+    `)
+    .eq('organization_id', organizationId)
+    .eq('role', 'owner')
+    .single();
+
+  if (error) {
+    console.error(`Failed to get owner for organization ${organizationId}:`, error);
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // Get user's email from auth.users
+  const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(data.user_id);
+
+  if (userError || !userData.user) {
+    console.error(`Failed to get user email for ${data.user_id}:`, userError);
+    return null;
+  }
+
+  return userData.user.email;
+}

@@ -16,7 +16,23 @@ export function registerWebhookRoutes(app) {
       const payload = req.body;
       const files = req.files || [];
 
-      console.log('[Webhook] Received email - Files:', files.length);
+      // Mailgun sends various webhook events (delivery, bounces, etc.)
+      // We only want to process actual incoming emails (stored messages)
+      // Incoming emails have 'sender', 'recipient', and usually attachments or body content
+      // Event webhooks have 'event-data' structure
+      if (payload['event-data']) {
+        // This is an event webhook (delivery, bounce, etc.), not an incoming email
+        console.log('[Webhook] Ignoring event webhook:', payload['event-data']?.event);
+        return res.status(200).json({ message: 'Event webhook ignored' });
+      }
+
+      // Check if this looks like an actual incoming email
+      if (!payload.sender && !payload.From) {
+        console.log('[Webhook] Ignoring webhook - no sender information');
+        return res.status(200).json({ message: 'Not an incoming email' });
+      }
+
+      console.log('[Webhook] Received incoming email - Files:', files.length);
 
       const sender = payload.sender ?? payload.From ?? 'unknown@unknown';
       const recipient = payload.recipient ?? payload.To ?? 'unknown@unknown';
@@ -25,13 +41,10 @@ export function registerWebhookRoutes(app) {
         ? new Date(Number(payload.timestamp) * 1000)
         : new Date();
 
-      console.log(`[Webhook] Extracted recipient email: "${recipient}"`);
-      console.log(`[Webhook] Looking up organization for: "${recipient}"`);
+      console.log(`[Webhook] Processing email from: ${sender} to: ${recipient}`);
 
       // Look up organization by recipient email
       const organization = await getOrganizationByRecipient(recipient);
-
-      console.log(`[Webhook] Organization lookup result:`, organization ? `Found: ${organization.name} (${organization.id})` : 'NOT FOUND');
 
       if (!organization) {
         console.error(`No organization found for recipient: ${recipient}`);
@@ -40,7 +53,7 @@ export function registerWebhookRoutes(app) {
         });
       }
 
-      console.log(`Email matched to organization: ${organization.name} (${organization.id})`);
+      console.log(`[Webhook] Email matched to organization: ${organization.name} (${organization.id})`);
 
       const parsed = await parseMailgunPayload(payload, files);
 
@@ -74,6 +87,8 @@ export function registerWebhookRoutes(app) {
         imageUrls,
         organizationId: organization.id
       });
+
+      console.log(`[Webhook] Email saved successfully to organization: ${organization.name}`);
 
       res.status(204).end();
     } catch (error) {

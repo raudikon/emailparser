@@ -3,7 +3,7 @@ import express from 'express';
 import { fetchEmailsWithImagesForDateRange } from '../services/emailService.js';
 import { storeGeneratedPosts } from '../services/postService.js';
 import { generateInstagramCaptions } from '../services/aiGenerator.js';
-import { listOrganizations } from '../services/organizationService.js';
+import { listOrganizations, getOrganizationOwnerEmail } from '../services/organizationService.js';
 import { sendDailyPostsNotification } from '../services/emailNotificationService.js';
 
 /**
@@ -102,7 +102,7 @@ export function registerCronRoutes(app) {
             results.push({
               organization: org.name,
               success: true,
-              captionsGenerated: 0,
+              postsGenerated: 0,
               message: 'No emails with images'
             });
             continue;
@@ -132,23 +132,30 @@ export function registerCronRoutes(app) {
           await storeGeneratedPosts(posts, org.id);
           console.log(`[Cron][${org.name}] Stored ${posts.length} new posts.`);
 
-          // Send email notification
-          const notificationEmail = process.env.NOTIFICATION_EMAIL;
-          if (notificationEmail) {
+          // Send email notification to organization owner
+          // In development, override with DEV_NOTIFICATION_EMAIL if set
+          const ownerEmail = await getOrganizationOwnerEmail(org.id);
+          const recipientEmail = process.env.DEV_NOTIFICATION_EMAIL || ownerEmail;
+
+          if (recipientEmail) {
             try {
               await sendDailyPostsNotification({
-                toEmail: notificationEmail,
+                toEmail: recipientEmail,
                 posts: posts,
                 organizationName: org.name,
                 date: now
               });
-              console.log(`[Cron][${org.name}] Sent notification email to ${notificationEmail}`);
+              if (process.env.DEV_NOTIFICATION_EMAIL) {
+                console.log(`[Cron][${org.name}] Sent notification email to DEV override: ${recipientEmail}`);
+              } else {
+                console.log(`[Cron][${org.name}] Sent notification email to owner: ${recipientEmail}`);
+              }
             } catch (emailError) {
               console.error(`[Cron][${org.name}] Failed to send notification email:`, emailError.message);
               // Don't fail the whole job if email fails
             }
           } else {
-            console.log(`[Cron][${org.name}] NOTIFICATION_EMAIL not set, skipping email notification`);
+            console.log(`[Cron][${org.name}] No recipient email found, skipping email notification`);
           }
 
           results.push({
