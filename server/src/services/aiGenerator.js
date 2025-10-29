@@ -58,16 +58,17 @@ Images from this email:`
 
     // Add each image from this email
     email.imageUrls.forEach((imageUrl, imageIndex) => {
-      // Extract base64 data and media type from data URL
-      // Format: data:image/png;base64,iVBORw0KG...
-      const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (matches) {
-        const mediaType = matches[1];
-        const base64Data = matches[2];
+      // Check if it's a base64 data URL or HTTP(S) URL
+      const base64Matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+
+      if (base64Matches) {
+        // Handle base64 data URLs (legacy format)
+        const mediaType = base64Matches[1];
+        const base64Data = base64Matches[2];
 
         // Log image size for debugging
         const sizeInMB = (base64Data.length * 0.75) / (1024 * 1024); // base64 is ~1.33x larger than binary
-        console.log(`[AI] Image ${emailIndex + 1}-${imageIndex + 1}: ${sizeInMB.toFixed(2)}MB`);
+        console.log(`[AI] Image ${emailIndex + 1}-${imageIndex + 1}: ${sizeInMB.toFixed(2)}MB (base64)`);
 
         // Anthropic's API has limits - skip images over 5MB
         if (sizeInMB > 5) {
@@ -83,12 +84,26 @@ Images from this email:`
             data: base64Data
           }
         });
+      } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        // Handle HTTP(S) URLs (Supabase Storage)
+        console.log(`[AI] Image ${emailIndex + 1}-${imageIndex + 1}: ${imageUrl.substring(0, 80)}... (URL)`);
 
         contentBlocks.push({
-          type: 'text',
-          text: `[This is image ${imageIndex + 1} of ${email.imageUrls.length} from Email ${emailIndex + 1}]\n`
+          type: 'image',
+          source: {
+            type: 'url',
+            url: imageUrl
+          }
         });
+      } else {
+        console.warn(`[AI] Skipping image ${emailIndex + 1}-${imageIndex + 1}: unsupported format`);
+        return;
       }
+
+      contentBlocks.push({
+        type: 'text',
+        text: `[This is image ${imageIndex + 1} of ${email.imageUrls.length} from Email ${emailIndex + 1}]\n`
+      });
     });
 
     contentBlocks.push({
