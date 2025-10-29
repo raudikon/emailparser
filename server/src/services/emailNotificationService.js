@@ -42,16 +42,22 @@ export async function sendDailyPostsNotification({ toEmail, posts, organizationN
   });
 
   // Build the email content
-  const captionsText = posts
+  const postsText = posts
     .map((post, index) => `${index + 1}. ${post.caption_text}`)
     .join('\n\n');
 
-  const htmlCaptions = posts
+  const htmlPosts = posts
     .map((post, index) => `
       <div style="margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
-        <h3 style="color: #333; margin-top: 0;">Caption ${index + 1}</h3>
-        <p style="font-size: 16px; line-height: 1.6; color: #555;">${escapeHtml(post.caption_text)}</p>
-        ${post.source_image_url ? '<p style="color: #888; font-size: 14px;">📷 Image included</p>' : ''}
+        <h3 style="color: #333; margin-top: 0;">Post ${index + 1}</h3>
+        ${post.source_image_url ? `
+          <div style="margin-bottom: 15px;">
+            <img src="${post.source_image_url}"
+                 alt="Post ${index + 1} image"
+                 style="max-width: 100%; height: auto; border-radius: 8px; display: block;" />
+          </div>
+        ` : ''}
+        <p style="font-size: 16px; line-height: 1.6; color: #555; white-space: pre-wrap;">${escapeHtml(post.caption_text)}</p>
       </div>
     `)
     .join('');
@@ -60,11 +66,11 @@ export async function sendDailyPostsNotification({ toEmail, posts, organizationN
 
 Hi there,
 
-Your daily Instagram captions for ${organizationName} are ready for ${dateStr}!
+Your daily Instagram posts for ${organizationName} are ready for ${dateStr}!
 
-We've generated ${posts.length} caption${posts.length > 1 ? 's' : ''} from today's emails:
+We've generated ${posts.length} post${posts.length > 1 ? 's' : ''} from today's emails:
 
-${captionsText}
+${postsText}
 
 ---
 
@@ -92,19 +98,19 @@ Happy posting!
     <p style="font-size: 16px; color: #555;">Hi there,</p>
 
     <p style="font-size: 16px; color: #555;">
-      Your daily Instagram captions are ready for <strong>${dateStr}</strong>!
+      Your daily Instagram posts are ready for <strong>${dateStr}</strong>!
     </p>
 
     <p style="font-size: 16px; color: #555;">
-      We've generated <strong>${posts.length} caption${posts.length > 1 ? 's' : ''}</strong> from today's emails with images:
+      We've generated <strong>${posts.length} post${posts.length > 1 ? 's' : ''}</strong> from today's emails with images:
     </p>
 
-    ${htmlCaptions}
+    ${htmlPosts}
 
     <div style="text-align: center; margin: 30px 0;">
       <a href="${process.env.FRONTEND_URL || 'https://your-app.com'}/dashboard/posts"
          style="display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-        View Posts & Images →
+        View All Posts in Dashboard →
       </a>
     </div>
 
@@ -124,7 +130,7 @@ Happy posting!
     const result = await mg.messages.create(MAILGUN_DOMAIN, {
       from: NOTIFICATION_FROM_EMAIL,
       to: [toEmail],
-      subject: `📱 ${posts.length} New Instagram Caption${posts.length > 1 ? 's' : ''} Ready - ${organizationName}`,
+      subject: `📱 ${posts.length} New Instagram Post${posts.length > 1 ? 's' : ''} Ready - ${organizationName}`,
       text: textContent,
       html: htmlContent
     });
